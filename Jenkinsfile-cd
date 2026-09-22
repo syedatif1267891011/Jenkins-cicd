@@ -8,19 +8,101 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                // Clones this repository so we have access to run_from_ecr.sh
                 checkout scm
             }
         }
 
-        stage('Deploy Application') {
+        stage('Prepare Variables') {
+            steps {
+                script {
+                    env.ACCOUNT_ID = sh(
+                        script: 'aws sts get-caller-identity --query Account --output text',
+                        returnStdout: true
+                    ).trim()
+                    
+                    env.ECR_URL = "${env.ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                    env.BACKEND_IMAGE = "${env.ECR_URL}/python-backend:latest"
+                    env.FRONTEND_IMAGE = "${env.ECR_URL}/python-frontend:latest"
+                }
+            }
+        }
+
+        stage('Login to ECR') {
             steps {
                 sh '''
-                echo "Making deployment script executable..."
-                chmod +x run_from_ecr.sh
-                
-                echo "Executing deployment script..."
-                ./run_from_ecr.sh
+                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URL}
+                '''
+            }
+        }
+
+        stage('Pull Images') {
+            steps {
+                sh '''
+                docker pull ${BACKEND_IMAGE}
+                docker pull ${FRONTEND_IMAGE}
+                '''
+            }
+        }
+
+        stage('Clean Up Previous Deployment') {
+            steps {
+                sh '''
+                docker rm -f inventory_frontend inventory_backend inventory_db 2>/dev/null || true
+                docker network rm inventory_network 2>/dev/null || true
+                '''
+            }
+        }
+
+        stage('Create Docker Network') {
+            steps {
+                sh '''
+                docker network create inventory_network || true
+                '''
+            }
+        }
+
+        stage('Deploy Database') {
+            steps {
+                sh '''
+                docker run -d \
+                  --name inventory_db \
+                  --network inventory_network \
+                  --restart unless-stopped \
+                  -e POSTGRES_DB=inventory_db \
+                  -e POSTGRES_USER=inventory_user \
+                  -e POSTGRES_PASSWORD=inventory_pass \
+                  postgres:16-alpine
+                  
+                echo "Waiting 10 seconds for database to initialize..."
+                sleep 10
+                '''
+            }
+        }
+
+        stage('Deploy Backend') {
+            steps {
+                sh '''
+                docker run -d \
+                  --name inventory_backend \
+                  --network inventory_network \
+                  --restart unless-stopped \
+                  -e DATABASE_URL="postgresql://inventory_user:inventory_pass@inventory_db:5432/inventory_db" \
+                  -e SECRET_KEY="super-secret-production-key" \
+                  -e FLASK_DEBUG="false" \
+                  ${BACKEND_IMAGE}
+                '''
+            }
+        }
+
+        stage('Deploy Frontend') {
+            steps {
+                sh '''
+                docker run -d \
+                  --name inventory_frontend \
+                  --network inventory_network \
+                  --restart unless-stopped \
+                  -p 8080:80 \
+                  ${FRONTEND_IMAGE}
                 '''
             }
         }
