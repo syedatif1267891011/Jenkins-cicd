@@ -107,6 +107,8 @@ pipeline {
                 '''
             }
         }
+    }
+
     post {
         always {
             sh '''
