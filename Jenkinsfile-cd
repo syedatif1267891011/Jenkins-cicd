@@ -1,0 +1,28 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'ap-south-1'
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                // Clones this repository so we have access to run_from_ecr.sh
+                checkout scm
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                sh '''
+                echo "Making deployment script executable..."
+                chmod +x run_from_ecr.sh
+                
+                echo "Executing deployment script..."
+                ./run_from_ecr.sh
+                '''
+            }
+        }
+    }
+}
