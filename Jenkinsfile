@@ -112,8 +112,7 @@ pipeline {
     post {
         success {
             // Trigger the CD pipeline if CI succeeds
-            // Ensure your CD job in Jenkins is named 'python-3tier-app-cd' (or update this name)
-            build job: 'python-3tier-app-cd', wait: false
+            build job: 'jenkins-cd', wait: false
         }
         always {
             sh '''

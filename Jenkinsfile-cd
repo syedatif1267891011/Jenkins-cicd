@@ -101,7 +101,7 @@ pipeline {
                   --name inventory_frontend \
                   --network inventory_network \
                   --restart unless-stopped \
-                  -p 8080:80 \
+                  -p 8081:80 \
                   ${FRONTEND_IMAGE}
                 '''
             }
