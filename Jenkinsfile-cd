@@ -107,4 +107,11 @@ pipeline {
             }
         }
     }
+
+    post {
+        always {
+            // Prune dangling images left behind after each pull+run cycle
+            sh 'docker image prune -f || true'
+        }
+    }
 }
